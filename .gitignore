@@ -1,0 +1,42 @@
+# Qt
+*.user
+*.user.*
+*.qmake.stash
+*.pro.user
+*.pro.user.*
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+Makefile*
+*build-*
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake
+!CMakeLists.txt
+!qtcsettings.cmake
+
+# Build directories
+build/
+debug/
+release/
+bin/
+obj/
+
+# Windows
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.lib
+*.exp
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Qt Creator
+.qtcreator/
