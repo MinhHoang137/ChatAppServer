@@ -3,16 +3,15 @@
 
 #include <QObject>
 #include <QQmlEngine>
-#include <winsock2.h>
-#include <ws2tcpip.h>
+#include "authentication.h"
+#include <functional>
 #include <iostream>
+#include <map>
+#include <mutex>
 #include <thread>
 #include <vector>
-#include <mutex>
-#include <map>
-#include <functional>
-#include "authentication.h"
-
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #define DB_NAME "ChatApp.db"
 
@@ -31,11 +30,10 @@ public:
 
     Q_INVOKABLE void startServer();
 
-    static Server* getInstance();
+    static Server *getInstance();
 
     QString serverIp() const;
     int serverPort() const;
-
 
 signals:
     void serverIpChanged();
@@ -51,9 +49,9 @@ private:
     int m_serverPort;
     std::vector<SOCKET> clientSockets;
     std::mutex clientSocketsMutex;
-    static Server* m_instance;
-    std::map<QString, std::function<QJsonObject(const QJsonObject&, SOCKET)>> handlers;
-    std::map<int, SOCKET> userSockets;  
+    static Server *m_instance;
+    std::map<QString, std::function<QJsonObject(const QJsonObject &, SOCKET)>> handlers;
+    std::map<int, SOCKET> userSockets;
 };
 
 #endif // SERVER_H

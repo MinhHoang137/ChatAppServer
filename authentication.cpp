@@ -1,13 +1,14 @@
 #include "authentication.h"
-#include "server.h"
 #include <QDebug>
-#include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QString>
 #include <QJsonObject>
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QString>
+#include "server.h"
 
-AuthResult registerUser(const QString &username, const QString &password, const std::string &dbName) {
+AuthResult registerUser(const QString &username, const QString &password, const std::string &dbName)
+{
     AuthResult result;
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "RegisterConnection");
     db.setDatabaseName(QString::fromStdString(dbName));
@@ -20,7 +21,8 @@ AuthResult registerUser(const QString &username, const QString &password, const 
     }
 
     QSqlQuery query(db);
-    query.prepare("insert into Users (Username, PasswordHash, Status) values (:Username, :PasswordHash, 1);");
+    query.prepare(
+        "insert into Users (Username, PasswordHash, Status) values (:Username, :PasswordHash, 1);");
     query.bindValue(":Username", username);
     query.bindValue(":PasswordHash", password); // In production, hash the password!
 
@@ -43,19 +45,32 @@ AuthResult registerUser(const QString &username, const QString &password, const 
     return result;
 }
 
-QJsonObject handleRegistration(const QJsonObject &request, SOCKET clientSocket) {
+QJsonObject handleRegistration(const QJsonObject &request, SOCKET clientSocket)
+{
     QString username = request["username"].toString();
     QString password = request["password"].toString();
-
+    QJsonObject response;
     AuthResult result = registerUser(username, password, DB_NAME);
-    return {
-        {"success", result.result},
-        {"message", QString::fromStdString(result.message)},
-        {"userId", result.userId}
-    };
+    response = {{"action", "registerResponse"},
+                {"success", result.result},
+                {"message", QString::fromStdString(result.message)},
+                {"userId", result.userId}};
+    char sendbuf[4096];
+    QJsonDocument doc(response);
+    QByteArray byteArray = doc.toJson(QJsonDocument::Compact);
+    memcpy(sendbuf, byteArray.constData(), byteArray.size());
+    sendbuf[byteArray.size()] = '\0';
+    int iSendResult = send(clientSocket, sendbuf, static_cast<int>(byteArray.size()), 0);
+    if (iSendResult == SOCKET_ERROR) {
+        qDebug() << "send failed with error:" << WSAGetLastError();
+    } else {
+        qDebug() << "Sent registration response to client: " << response["userId"].toInt();
+    }
+    return response;
 }
 
-AuthResult loginUser(const QString &username, const QString &password, const std::string &dbName) {
+AuthResult loginUser(const QString &username, const QString &password, const std::string &dbName)
+{
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "LoginConnection");
     db.setDatabaseName(QString::fromStdString(dbName));
     AuthResult result;
@@ -83,7 +98,7 @@ AuthResult loginUser(const QString &username, const QString &password, const std
         int userId = query.value(0).toInt();
         QString storedPasswordHash = query.value(1).toString();
         bool loginSuccess = storedPasswordHash == password;
-        if (loginSuccess){
+        if (loginSuccess) {
             // udate user status to online
             QSqlQuery updateQuery(db);
             updateQuery.prepare("update Users set Status = 1 where Username = :Username;");
@@ -114,19 +129,19 @@ AuthResult loginUser(const QString &username, const QString &password, const std
     return result;
 }
 
-QJsonObject handleLogin(const QJsonObject &request, SOCKET clientSocket) {
+QJsonObject handleLogin(const QJsonObject &request, SOCKET clientSocket)
+{
     QString username = request["username"].toString();
     QString password = request["password"].toString();
 
     AuthResult result = loginUser(username, password, DB_NAME);
-    return {
-        {"success", result.result},
-        {"message", QString::fromStdString(result.message)},
-        {"userId", result.userId}
-    };
+    return {{"success", result.result},
+            {"message", QString::fromStdString(result.message)},
+            {"userId", result.userId}};
 }
 
-bool logoutUser(const QString &username, const std::string &dbName) {
+bool logoutUser(const int & userID, const std::string &dbName)
+{
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "LogoutConnection");
     db.setDatabaseName(QString::fromStdString(dbName));
 
@@ -136,8 +151,8 @@ bool logoutUser(const QString &username, const std::string &dbName) {
     }
 
     QSqlQuery query(db);
-    query.prepare("update Users set Status = 0 where Username = :Username;");
-    query.bindValue(":Username", username);
+    query.prepare("update Users set Status = 0 where UserID = :UserID;");
+    query.bindValue(":UserID", userID);
 
     if (!query.exec()) {
         qDebug() << "Logout failed:" << query.lastError().text();
@@ -148,21 +163,21 @@ bool logoutUser(const QString &username, const std::string &dbName) {
 
     db.close();
     QSqlDatabase::removeDatabase("LogoutConnection");
-    qDebug() << "User logged out successfully:" << username;
+    qDebug() << "User logged out successfully:" << userID;
     return true;
 }
 
-QJsonObject handleLogout(const QJsonObject &request, SOCKET clientSocket) {
-    QString username = request["username"].toString();
-    bool success = logoutUser(username, DB_NAME);
-    return {
-        {"success", success},
-        {"message", success ? "Logout successful" : "Logout failed"}
-    };
-}
+// QJsonObject handleLogout(const QJsonObject &request, SOCKET clientSocket)
+// {
+//     QString username = request["username"].toString();
+//     bool success = logoutUser(username, DB_NAME);
+//     return {{"success", success}, {"message", success ? "Logout successful" : "Logout failed"}};
+// }
 
-void initAuthenticationHandlers(std::map<QString, std::function<QJsonObject(const QJsonObject&, SOCKET)>> &handlers) {
+void initAuthenticationHandlers(
+    std::map<QString, std::function<QJsonObject(const QJsonObject &, SOCKET)>> &handlers)
+{
     handlers["register"] = handleRegistration;
     handlers["login"] = handleLogin;
-    handlers["logout"] = handleLogout;
+    // handlers["logout"] = handleLogout;
 }

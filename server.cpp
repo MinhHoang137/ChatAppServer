@@ -1,27 +1,31 @@
 #include "server.h"
-#include "authentication.h"
 #include <QDebug>
+#include <QDir>
 #include <QNetworkInterface>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
-#include <QDir>
+#include "authentication.h"
 
-Server* Server::m_instance = nullptr;
+Server *Server::m_instance = nullptr;
 
-Server::Server(QObject *parent) : QObject(parent), serverSocket(INVALID_SOCKET), m_serverPort(8080) {
+Server::Server(QObject *parent)
+    : QObject(parent)
+    , serverSocket(INVALID_SOCKET)
+    , m_serverPort(8080)
+{
     if (m_instance) {
         qFatal("Server instance already exists! Only one instance is allowed.");
     }
     m_instance = this;
     qDebug() << "Current Working Directory:" << QDir::currentPath();
-    
+
     // Find local IP address
     const QHostAddress &localhost = QHostAddress(QHostAddress::LocalHost);
     for (const QHostAddress &address : QNetworkInterface::allAddresses()) {
         if (address.protocol() == QAbstractSocket::IPv4Protocol && address != localhost) {
-             m_serverIp = address.toString();
-             break;
+            m_serverIp = address.toString();
+            break;
         }
     }
     if (m_serverIp.isEmpty()) {
@@ -35,7 +39,8 @@ Server::Server(QObject *parent) : QObject(parent), serverSocket(INVALID_SOCKET),
     initDatabase();
 }
 
-Server::~Server() {
+Server::~Server()
+{
     if (m_instance == this) {
         m_instance = nullptr;
     }
@@ -45,24 +50,29 @@ Server::~Server() {
     WSACleanup();
 }
 
-Server* Server::getInstance() {
+Server *Server::getInstance()
+{
     return m_instance;
 }
 
-QString Server::serverIp() const {
+QString Server::serverIp() const
+{
     return m_serverIp;
 }
 
-int Server::serverPort() const {
+int Server::serverPort() const
+{
     return m_serverPort;
 }
 
-void Server::startServer() {
+void Server::startServer()
+{
     // Chạy server trên một luồng riêng biệt để không chặn giao diện người dùng (nếu có)
     std::thread(&Server::runServer, this).detach();
 }
 
-void Server::initDatabase() {
+void Server::initDatabase()
+{
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "InitConnection");
     db.setDatabaseName(QString::fromLatin1(DB_NAME));
 
@@ -131,7 +141,8 @@ void Server::initDatabase() {
     qDebug() << "Database initialized successfully.";
 }
 
-void Server::runServer() {
+void Server::runServer()
+{
     WSADATA wsaData;
     int iResult;
 
@@ -153,7 +164,7 @@ void Server::runServer() {
 
     // Resolve the server address and port
     iResult = getaddrinfo(NULL, "8080", &hints, &result);
-    if ( iResult != 0 ) {
+    if (iResult != 0) {
         qDebug() << "getaddrinfo failed with error: " << iResult;
         WSACleanup();
         return;
@@ -169,7 +180,7 @@ void Server::runServer() {
     }
 
     // 2. Giai đoạn bind (Setup the TCP listening socket)
-    iResult = bind( serverSocket, result->ai_addr, (int)result->ai_addrlen);
+    iResult = bind(serverSocket, result->ai_addr, (int) result->ai_addrlen);
     if (iResult == SOCKET_ERROR) {
         qDebug() << "bind failed with error: " << WSAGetLastError();
         freeaddrinfo(result);
@@ -195,7 +206,7 @@ void Server::runServer() {
 
     // 4. Giai đoạn accept (Accept a client socket)
     // Vòng lặp để chấp nhận nhiều kết nối (tuần tự trong ví dụ đơn giản này)
-    while(true) {
+    while (true) {
         clientSocket = accept(serverSocket, NULL, NULL);
         if (clientSocket == INVALID_SOCKET) {
             int error = WSAGetLastError();
@@ -218,7 +229,8 @@ void Server::runServer() {
     }
 }
 
-void Server::handleClient(SOCKET clientSocket) {
+void Server::handleClient(SOCKET clientSocket)
+{
     int iResult;
     char recvbuf[4096]; // Buffer lớn hơn để chứa JSON
     int recvbuflen = 4096;
@@ -238,31 +250,42 @@ void Server::handleClient(SOCKET clientSocket) {
             // Ví dụ: auto jsonDoc = QJsonDocument::fromJson(QByteArray::fromStdString(receivedData));
 
             clientSocketsMutex.lock();
-            // Gửi lại dữ liệu cho tất cả các client đã kết nối (broadcast)
-            for (SOCKET sock : clientSockets) {
-                if (sock != clientSocket) { // Không gửi lại cho chính client gửi
-                    int sendResult = send(sock, recvbuf, iResult, 0);
-                    if (sendResult == SOCKET_ERROR) {
-                        qDebug() << "send failed with error: " << WSAGetLastError();
-                    }
+            try {
+                QJsonObject request = QJsonDocument::fromJson(QByteArray::fromStdString(receivedData)).object();
+                QString action = request["action"].toString();
+                
+                if (handlers.find(action) != handlers.end()) {
+                    handlers[action](request, clientSocket);
+                } else {
+                    qDebug() << "Unknown action:" << action;
                 }
+            } catch (const std::exception &e) {
+                qDebug() << "Exception in handleClient:" << e.what();
+            } catch (...) {
+                qDebug() << "Unknown exception in handleClient";
             }
             clientSocketsMutex.unlock();
-            
 
             // ---------------------------------------------------------
 
-        }
-        else if (iResult == 0)
+        } else if (iResult == 0)
             qDebug() << "Connection closing...";
-        else  {
+        else {
             qDebug() << "recv failed with error: " << WSAGetLastError();
             closesocket(clientSocket);
             return;
         }
 
     } while (iResult > 0);
-
+    // logout user if logged in
+    for (const auto &pair : userSockets) {
+        if (pair.second == clientSocket) {
+            int userId = pair.first;
+            logoutUser(userId, DB_NAME);
+            userSockets.erase(userId);
+            break;
+        }
+    } 
     // shutdown the connection since we're done
     iResult = shutdown(clientSocket, SD_SEND);
     if (iResult == SOCKET_ERROR) {
