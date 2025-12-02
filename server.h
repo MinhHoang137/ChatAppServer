@@ -13,9 +13,15 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include <QJsonObject>
+#include <QJsonDocument>
+
 #define DB_NAME "ChatApp.db"
 
 #pragma comment(lib, "Ws2_32.lib")
+
+// Helper function to send JSON response
+
 
 class Server : public QObject
 {
@@ -36,6 +42,7 @@ public:
     int serverPort() const;
 
     void addUserToMap(int userId, SOCKET clientSock);
+    SOCKET getUserSocket(int userId);
 signals:
     void serverIpChanged();
     void serverPortChanged();

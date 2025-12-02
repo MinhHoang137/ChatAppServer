@@ -6,6 +6,8 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include "authentication.h"
+#include "header.h"
+#include "friend.h"
 
 Server *Server::m_instance = nullptr;
 
@@ -34,6 +36,7 @@ Server::Server(QObject *parent)
 
     // Initialize handlers
     initAuthenticationHandlers(handlers);
+    initFriendHandlers(handlers);
 
     // Initialize Database
     initDatabase();
@@ -242,6 +245,11 @@ void Server::runServer()
 
 void Server::handleClient(SOCKET clientSocket)
 {
+    struct sockaddr_in clientAddr;
+    int addrLen = sizeof(clientAddr);
+    getpeername(clientSocket, (struct sockaddr*)&clientAddr, &addrLen);
+    std::string clientIp = inet_ntoa(clientAddr.sin_addr);
+
     int iResult;
     char recvbuf[4096]; // Buffer lớn hơn để chứa JSON
     int recvbuflen = 4096;
@@ -254,6 +262,7 @@ void Server::handleClient(SOCKET clientSocket)
 
             // Chuyển dữ liệu nhận được thành chuỗi (giả sử là JSON string)
             std::string receivedData(recvbuf, iResult);
+            logMessage("[" + clientIp + "] " + receivedData);
 
             // ---------------------------------------------------------
             // [CHO TRONG DE XU LY THONG TIN DUOC GUI DEN]
@@ -284,8 +293,7 @@ void Server::handleClient(SOCKET clientSocket)
             qDebug() << "Connection closing...";
         else {
             qDebug() << "recv failed with error: " << WSAGetLastError();
-            closesocket(clientSocket);
-            return;
+            break;
         }
 
     } while (iResult > 0);
@@ -310,4 +318,16 @@ void Server::handleClient(SOCKET clientSocket)
     }
 
     closesocket(clientSocket);
+}
+
+SOCKET Server::getUserSocket(int userId)
+{
+    userSocketsMutex.lock();
+    if (userSockets.find(userId) != userSockets.end()) {
+        SOCKET sock = userSockets[userId];
+        userSocketsMutex.unlock();
+        return sock;
+    }
+    userSocketsMutex.unlock();
+    return 0; // Return 0 if user not found
 }

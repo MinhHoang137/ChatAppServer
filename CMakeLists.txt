@@ -20,6 +20,10 @@ qt_add_qml_module(appServer
     SOURCES server.h server.cpp
     SOURCES authentication.cpp
     SOURCES authentication.h
+    SOURCES header.h
+    SOURCES friend.cpp
+    SOURCES friend.h
+    SOURCES header.cpp
 )
 
 target_link_libraries(appServer PRIVATE Qt6::Quick Qt6::Core Qt6::Widgets Qt6::Network Qt6::Sql Ws2_32)

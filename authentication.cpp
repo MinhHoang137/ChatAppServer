@@ -1,4 +1,5 @@
 #include "authentication.h"
+#include "header.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QSqlDatabase>
@@ -55,20 +56,11 @@ QJsonObject handleRegistration(const QJsonObject &request, SOCKET clientSocket)
                 {"success", result.result},
                 {"message", QString::fromStdString(result.message)},
                 {"userId", result.userId}};
-    char sendbuf[4096];
-    QJsonDocument doc(response);
-    QByteArray byteArray = doc.toJson(QJsonDocument::Compact);
-    memcpy(sendbuf, byteArray.constData(), byteArray.size());
-    sendbuf[byteArray.size()] = '\0';
-    int iSendResult = send(clientSocket, sendbuf, static_cast<int>(byteArray.size()), 0);
-    if (iSendResult == SOCKET_ERROR) {
-        qDebug() << "send failed with error:" << WSAGetLastError();
-    } else {
-        qDebug() << "Sent registration response to client: " << response["userId"].toInt();
-        if (result.result) {
-            // If registration successful, add user to server's userSockets map
-            Server::getInstance()->addUserToMap(result.userId, clientSocket);
-        }
+    sendJsonResponse(clientSocket, response);
+    qDebug() << "Sent registration response to client: " << response["userId"].toInt();
+    if (result.result) {
+        // If registration successful, add user to server's userSockets map
+        Server::getInstance()->addUserToMap(result.userId, clientSocket);
     }
     return response;
 }
@@ -119,14 +111,14 @@ AuthResult loginUser(const QString &username, const QString &password, const std
         db.close();
         QSqlDatabase::removeDatabase("LoginConnection");
         result.result = loginSuccess;
-        result.message = loginSuccess ? "Login successful." : "Incorrect username or password.";
+        result.message = loginSuccess ? "Đăng nhập thành công." : "Tên đăng nhập hoặc mật khẩu không đúng.";
         return result;
     } else {
         qDebug() << "Username not found during login.";
         db.close();
         QSqlDatabase::removeDatabase("LoginConnection");
         result.result = false;
-        result.message = "Incorrect username or password.";
+        result.message = "Tên đăng nhập có thể không tồn tại.";
         return result;
     }
     return result;
@@ -143,20 +135,11 @@ QJsonObject handleLogin(const QJsonObject &request, SOCKET clientSocket)
                             {"message", QString::fromStdString(result.message)},
                             {"userId", result.userId}};
 
-    char sendbuf[4096];
-    QJsonDocument doc(response);
-    QByteArray byteArray = doc.toJson(QJsonDocument::Compact);
-    memcpy(sendbuf, byteArray.constData(), byteArray.size());
-    sendbuf[byteArray.size()] = '\0';
-    int iSendResult = send(clientSocket, sendbuf, static_cast<int>(byteArray.size()), 0);
-    if (iSendResult == SOCKET_ERROR) {
-        qDebug() << "send failed with error:" << WSAGetLastError();
-    } else {
-        qDebug() << "Sent login response to client: " << response["userId"].toInt();
-        if (result.result) {
-            // If login successful, add user to server's userSockets map
-            Server::getInstance()->addUserToMap(result.userId, clientSocket);
-        }
+    sendJsonResponse(clientSocket, response);
+    qDebug() << "Sent login response to client: " << response["userId"].toInt();
+    if (result.result) {
+        // If login successful, add user to server's userSockets map
+        Server::getInstance()->addUserToMap(result.userId, clientSocket);
     }
     return response;
 }
@@ -188,17 +171,21 @@ bool logoutUser(const int &userID, const std::string &dbName)
     return true;
 }
 
-// QJsonObject handleLogout(const QJsonObject &request, SOCKET clientSocket)
-// {
-//     QString username = request["username"].toString();
-//     bool success = logoutUser(username, DB_NAME);
-//     return {{"success", success}, {"message", success ? "Logout successful" : "Logout failed"}};
-// }
+QJsonObject handleLogout(const QJsonObject &request, SOCKET clientSocket)
+{
+    int userId = request["userId"].toInt();
+    bool success = logoutUser(userId, DB_NAME);
+    QJsonObject response = {{"action", "logoutResponse"},
+                            {"success", success},
+                            {"message", success ? "Logout successful" : "Logout failed"}};
+    sendJsonResponse(clientSocket, response);
+    return response;
+}
 
 void initAuthenticationHandlers(
     std::map<QString, std::function<QJsonObject(const QJsonObject &, SOCKET)>> &handlers)
 {
     handlers["register"] = handleRegistration;
     handlers["login"] = handleLogin;
-    // handlers["logout"] = handleLogout;
+    handlers["logout"] = handleLogout;
 }
