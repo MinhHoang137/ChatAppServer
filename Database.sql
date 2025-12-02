@@ -21,11 +21,13 @@ create table if not exists Messages (
 create table if not exists Friendships (
     UserID1 INTEGER not null,
     UserID2 INTEGER not null,
+    RequesterID INTEGER not null, -- ID of the user who sent the friend request
     Status INTEGER not null, -- 0: pending, 1: accepted, 2: blocked
     CreatedAt DATETIME default CURRENT_TIMESTAMP,
     primary key (UserID1, UserID2),
     foreign key (UserID1) references Users(UserID),
     foreign key (UserID2) references Users(UserID)
+    -- foreign key (RequesterID) references Users(UserID)
 );
 
 create table if not exists Groups (

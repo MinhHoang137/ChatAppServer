@@ -100,11 +100,13 @@ void Server::initDatabase()
            << "create table if not exists Friendships ("
               "UserID1 INTEGER not null,"
               "UserID2 INTEGER not null,"
+            //   "RequesterID INTEGER not null,"
               "Status INTEGER not null,"
               "CreatedAt DATETIME default CURRENT_TIMESTAMP,"
               "primary key (UserID1, UserID2),"
               "foreign key (UserID1) references Users(UserID),"
               "foreign key (UserID2) references Users(UserID)"
+            //   "foreign key (RequesterID) references Users(UserID)"
               ");"
            << "create table if not exists Groups ("
               "GroupID INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -139,6 +141,15 @@ void Server::initDatabase()
     db.close();
     QSqlDatabase::removeDatabase("InitConnection");
     qDebug() << "Database initialized successfully.";
+}
+
+
+void Server::addUserToMap(int userId, SOCKET clientSock)
+{
+    userSocketsMutex.lock();
+    userSockets[userId] = clientSock;
+    qDebug() << "User" << userId << "added to userSockets map.";
+    userSocketsMutex.unlock();
 }
 
 void Server::runServer()
@@ -251,11 +262,12 @@ void Server::handleClient(SOCKET clientSocket)
 
             clientSocketsMutex.lock();
             try {
-                QJsonObject request = QJsonDocument::fromJson(QByteArray::fromStdString(receivedData)).object();
+                QJsonObject request
+                    = QJsonDocument::fromJson(QByteArray::fromStdString(receivedData)).object();
                 QString action = request["action"].toString();
-                
+
                 if (handlers.find(action) != handlers.end()) {
-                    handlers[action](request, clientSocket);
+                    QJsonObject response = handlers[action](request, clientSocket);
                 } else {
                     qDebug() << "Unknown action:" << action;
                 }
@@ -278,14 +290,17 @@ void Server::handleClient(SOCKET clientSocket)
 
     } while (iResult > 0);
     // logout user if logged in
-    for (const auto &pair : userSockets) {
-        if (pair.second == clientSocket) {
-            int userId = pair.first;
+    userSocketsMutex.lock();
+    for (auto it = userSockets.begin(); it != userSockets.end(); ++it) {
+        if (it->second == clientSocket) {
+            int userId = it->first;
             logoutUser(userId, DB_NAME);
-            userSockets.erase(userId);
+            userSockets.erase(it);
+            qDebug() << "User" << userId << "logged out and removed from userSockets map.";
             break;
         }
-    } 
+    }
+    userSocketsMutex.unlock();
     // shutdown the connection since we're done
     iResult = shutdown(clientSocket, SD_SEND);
     if (iResult == SOCKET_ERROR) {

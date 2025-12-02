@@ -65,6 +65,10 @@ QJsonObject handleRegistration(const QJsonObject &request, SOCKET clientSocket)
         qDebug() << "send failed with error:" << WSAGetLastError();
     } else {
         qDebug() << "Sent registration response to client: " << response["userId"].toInt();
+        if (result.result) {
+            // If registration successful, add user to server's userSockets map
+            Server::getInstance()->addUserToMap(result.userId, clientSocket);
+        }
     }
     return response;
 }
@@ -116,7 +120,6 @@ AuthResult loginUser(const QString &username, const QString &password, const std
         QSqlDatabase::removeDatabase("LoginConnection");
         result.result = loginSuccess;
         result.message = loginSuccess ? "Login successful." : "Incorrect username or password.";
-
         return result;
     } else {
         qDebug() << "Username not found during login.";
@@ -135,12 +138,30 @@ QJsonObject handleLogin(const QJsonObject &request, SOCKET clientSocket)
     QString password = request["password"].toString();
 
     AuthResult result = loginUser(username, password, DB_NAME);
-    return {{"success", result.result},
-            {"message", QString::fromStdString(result.message)},
-            {"userId", result.userId}};
+    QJsonObject response = {{"action", "loginResponse"},
+                            {"success", result.result},
+                            {"message", QString::fromStdString(result.message)},
+                            {"userId", result.userId}};
+
+    char sendbuf[4096];
+    QJsonDocument doc(response);
+    QByteArray byteArray = doc.toJson(QJsonDocument::Compact);
+    memcpy(sendbuf, byteArray.constData(), byteArray.size());
+    sendbuf[byteArray.size()] = '\0';
+    int iSendResult = send(clientSocket, sendbuf, static_cast<int>(byteArray.size()), 0);
+    if (iSendResult == SOCKET_ERROR) {
+        qDebug() << "send failed with error:" << WSAGetLastError();
+    } else {
+        qDebug() << "Sent login response to client: " << response["userId"].toInt();
+        if (result.result) {
+            // If login successful, add user to server's userSockets map
+            Server::getInstance()->addUserToMap(result.userId, clientSocket);
+        }
+    }
+    return response;
 }
 
-bool logoutUser(const int & userID, const std::string &dbName)
+bool logoutUser(const int &userID, const std::string &dbName)
 {
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "LogoutConnection");
     db.setDatabaseName(QString::fromStdString(dbName));

@@ -35,6 +35,7 @@ public:
     QString serverIp() const;
     int serverPort() const;
 
+    void addUserToMap(int userId, SOCKET clientSock);
 signals:
     void serverIpChanged();
     void serverPortChanged();
@@ -52,6 +53,7 @@ private:
     static Server *m_instance;
     std::map<QString, std::function<QJsonObject(const QJsonObject &, SOCKET)>> handlers;
     std::map<int, SOCKET> userSockets;
+    std::mutex userSocketsMutex;
 };
 
 #endif // SERVER_H
