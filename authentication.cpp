@@ -23,7 +23,7 @@ AuthResult registerUser(const QString &username, const QString &password, const 
 
     QSqlQuery query(db);
     query.prepare(
-        "insert into Users (Username, PasswordHash, Status) values (:Username, :PasswordHash, 1);");
+        "insert into Users (Username, PasswordHash, Status) values (:Username, :PasswordHash, 0);");
     query.bindValue(":Username", username);
     query.bindValue(":PasswordHash", password); // In production, hash the password!
 
