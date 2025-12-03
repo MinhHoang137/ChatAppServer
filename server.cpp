@@ -251,8 +251,8 @@ void Server::handleClient(SOCKET clientSocket)
     std::string clientIp = inet_ntoa(clientAddr.sin_addr);
 
     int iResult;
-    char recvbuf[4096]; // Buffer lớn hơn để chứa JSON
-    int recvbuflen = 4096;
+    char recvbuf[8192]; // Buffer lớn hơn để chứa JSON
+    int recvbuflen = 8192;
 
     // Nhận dữ liệu từ client
     do {

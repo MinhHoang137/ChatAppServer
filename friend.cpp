@@ -54,9 +54,12 @@ QJsonObject handleSendMessage(const QJsonObject &request, SOCKET clientSocket)
     QJsonObject response = sendMessage(senderID, receiverID, content, DB_NAME);
     response["action"] = "sendMessage";
     sendJsonResponse(clientSocket, response);
+    
     SOCKET targetSocket = Server::getInstance()->getUserSocket(receiverID);
     if (targetSocket != 0) {
-        sendJsonResponse(targetSocket, request); // Forward the message to the receiver
+        QJsonObject forwardMessage = request;
+        forwardMessage["action"] = "receiveMessage";
+        sendJsonResponse(targetSocket, forwardMessage); // Forward the message to the receiver
     }
     qDebug() << "Sent insert message response to client.";
     return {};
@@ -80,7 +83,7 @@ QJsonObject getAllMessages(int userID, int friendID, const std::string &dbName)
         "select SenderID, ReceiverID, Content, SentAt from Messages "
         "where (SenderID = :UserID and ReceiverID = :FriendID) "
         "or (SenderID = :FriendID and ReceiverID = :UserID) "
-        "order by SentAt ASC;");
+        "order by SentAt ASC LIMIT 20;");
     query.bindValue(":UserID", userID);
     query.bindValue(":FriendID", friendID);
 
