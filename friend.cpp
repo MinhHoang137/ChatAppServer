@@ -184,15 +184,17 @@ QJsonObject getNonFriendUsers(int userID, const std::string &dbName)
     }
 
     QSqlQuery query(db);
-    // Select users who are NOT the current user AND NOT in the Friendships table with the current user (any status)
+    // Select users who are NOT the current user AND NOT in the Friendships table with Status = 1 (Friends)
+    // This includes Strangers and Pending Requests (Incoming/Outgoing)
     query.prepare(
         "SELECT u.UserID, u.Username, u.Status "
         "FROM Users u "
         "WHERE u.UserID != :UserID "
         "AND NOT EXISTS ("
         "   SELECT 1 FROM Friendships f "
-        "   WHERE (f.UserID1 = u.UserID AND f.UserID2 = :UserID) "
-        "      OR (f.UserID1 = :UserID AND f.UserID2 = u.UserID)"
+        "   WHERE ((f.UserID1 = u.UserID AND f.UserID2 = :UserID) "
+        "      OR (f.UserID1 = :UserID AND f.UserID2 = u.UserID)) "
+        "   AND f.Status = 1"
         ");");
     query.bindValue(":UserID", userID);
 
@@ -490,6 +492,52 @@ QJsonObject handleGetFriendsList(const QJsonObject &request, SOCKET clientSocket
     return response;
 }
 
+QJsonObject unfriend(const int &userID1, const int &userID2, const std::string &dbName)
+{
+    QJsonObject result;
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "UnfriendConnection");
+    db.setDatabaseName(QString::fromStdString(dbName));
+    if (!db.open()) {
+        qDebug() << "Failed to open database for unfriending:" << db.lastError().text();
+        result["success"] = false;
+        result["message"] = "Database connection error.";
+        return result;
+    }
+
+    QSqlQuery query(db);
+    query.prepare(
+        "delete from Friendships "
+        "where (UserID1 = :UserID1 and UserID2 = :UserID2) "
+        "or (UserID1 = :UserID2 and UserID2 = :UserID1);");
+    query.bindValue(":UserID1", userID1);
+    query.bindValue(":UserID2", userID2);
+
+    if (query.exec()) {
+        result["success"] = true;
+        result["message"] = "Unfriended successfully.";
+    } else {
+        qDebug() << "Unfriending failed:" << query.lastError().text();
+        result["success"] = false;
+        result["message"] = "Failed to unfriend.";
+    }
+
+    db.close();
+    QSqlDatabase::removeDatabase("UnfriendConnection");
+    return result;
+}
+
+QJsonObject handleUnfriend(const QJsonObject &request, SOCKET clientSocket)
+{
+    int userID1 = request["fromUserID"].toInt();
+    int userID2 = request["toUserID"].toInt();
+
+    QJsonObject response = unfriend(userID1, userID2, DB_NAME);
+    response["action"] = "unfriend";
+    // người dùng tải lại danh sách bạn bè là thấy kết quả
+    qDebug() << "Sent unfriend response to client.";
+    return response;
+}
+
 void initFriendHandlers(std::map<QString, std::function<QJsonObject(const QJsonObject &, SOCKET)>> &handlers)
 {
     handlers["sendMessage"] = handleSendMessage;
@@ -501,4 +549,5 @@ void initFriendHandlers(std::map<QString, std::function<QJsonObject(const QJsonO
     handlers["acceptFriendRequest"] = handleAcceptFriendRequest;
     handlers["queryFriendStatus"] = handleQueryFriendStatus;
     handlers["getFriendsList"] = handleGetFriendsList;
+    handlers["unfriend"] = handleUnfriend;
 }
