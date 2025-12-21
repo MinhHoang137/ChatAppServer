@@ -1,16 +1,17 @@
 #include "header.h"
-#include <QJsonDocument>
 #include <QByteArray>
-#include <iostream>
-#include <fstream>
+#include <QJsonDocument>
 #include <ctime>
-#include <iomanip>
-#include <sstream>
 #include <direct.h> // For _mkdir
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 
 static std::ofstream logFile;
 
-void initLog() {
+void initLog()
+{
     _mkdir("logs");
 
     auto t = std::time(nullptr);
@@ -28,7 +29,8 @@ void initLog() {
     }
 }
 
-void logMessage(const std::string &message) {
+void logMessage(const std::string &message)
+{
     if (logFile.is_open()) {
         auto t = std::time(nullptr);
         auto tm = *std::localtime(&t);
@@ -37,11 +39,12 @@ void logMessage(const std::string &message) {
     }
 }
 
-int sendJsonResponse(SOCKET clientSocket, const QJsonObject &response) {
+int sendJsonResponse(SOCKET clientSocket, const QJsonObject &response)
+{
     char sendbuf[4096];
     QJsonDocument doc(response);
     QByteArray byteArray = doc.toJson(QJsonDocument::Compact);
-    
+
     // Ensure we don't overflow the buffer
     if (byteArray.size() >= 4096) {
         std::cerr << "Error: JSON response too large for buffer" << std::endl;

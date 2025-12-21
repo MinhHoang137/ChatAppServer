@@ -1,15 +1,18 @@
+#include "friend.h"
 #include <QDebug>
-#include <QJsonObject>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QString>
-#include "server.h"
-#include "friend.h"
 #include "header.h"
+#include "server.h"
 
-QJsonObject sendMessage(const int &senderID, const int &receiverID, const QString &content, const std::string &dbName)
+QJsonObject sendMessage(const int &senderID,
+                        const int &receiverID,
+                        const QString &content,
+                        const std::string &dbName)
 {
     QJsonObject result;
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "InsertMessageConnection");
@@ -23,8 +26,8 @@ QJsonObject sendMessage(const int &senderID, const int &receiverID, const QStrin
     }
 
     QSqlQuery query(db);
-    query.prepare(
-        "insert into Messages (SenderID, ReceiverID, Content) values (:SenderID, :ReceiverID, :Content);");
+    query.prepare("insert into Messages (SenderID, ReceiverID, Content) values (:SenderID, "
+                  ":ReceiverID, :Content);");
     query.bindValue(":SenderID", senderID);
     query.bindValue(":ReceiverID", receiverID);
     query.bindValue(":Content", content);
@@ -54,7 +57,7 @@ QJsonObject handleSendMessage(const QJsonObject &request, SOCKET clientSocket)
     QJsonObject response = sendMessage(senderID, receiverID, content, DB_NAME);
     response["action"] = "sendMessage";
     sendJsonResponse(clientSocket, response);
-    
+
     SOCKET targetSocket = Server::getInstance()->getUserSocket(receiverID);
     if (targetSocket != 0) {
         QJsonObject forwardMessage = request;
@@ -80,11 +83,10 @@ QJsonObject getAllMessages(int userID, int friendID, const std::string &dbName)
     }
 
     QSqlQuery query(db);
-    query.prepare(
-        "select SenderID, ReceiverID, Content, SentAt from Messages "
-        "where (SenderID = :UserID and ReceiverID = :FriendID) "
-        "or (SenderID = :FriendID and ReceiverID = :UserID) "
-        "order by SentAt ASC LIMIT 20;");
+    query.prepare("select SenderID, ReceiverID, Content, SentAt from Messages "
+                  "where (SenderID = :UserID and ReceiverID = :FriendID) "
+                  "or (SenderID = :FriendID and ReceiverID = :UserID) "
+                  "order by SentAt ASC LIMIT 20;");
     query.bindValue(":UserID", userID);
     query.bindValue(":FriendID", friendID);
 
@@ -177,7 +179,8 @@ QJsonObject getNonFriendUsers(int userID, const std::string &dbName)
     db.setDatabaseName(QString::fromStdString(dbName));
 
     if (!db.open()) {
-        qDebug() << "Failed to open database for getting non-friend users:" << db.lastError().text();
+        qDebug() << "Failed to open database for getting non-friend users:"
+                 << db.lastError().text();
         result["success"] = false;
         result["message"] = "Database connection error.";
         return result;
@@ -186,16 +189,15 @@ QJsonObject getNonFriendUsers(int userID, const std::string &dbName)
     QSqlQuery query(db);
     // Select users who are NOT the current user AND NOT in the Friendships table with Status = 1 (Friends)
     // This includes Strangers and Pending Requests (Incoming/Outgoing)
-    query.prepare(
-        "SELECT u.UserID, u.Username, u.Status "
-        "FROM Users u "
-        "WHERE u.UserID != :UserID "
-        "AND NOT EXISTS ("
-        "   SELECT 1 FROM Friendships f "
-        "   WHERE ((f.UserID1 = u.UserID AND f.UserID2 = :UserID) "
-        "      OR (f.UserID1 = :UserID AND f.UserID2 = u.UserID)) "
-        "   AND f.Status = 1"
-        ");");
+    query.prepare("SELECT u.UserID, u.Username, u.Status "
+                  "FROM Users u "
+                  "WHERE u.UserID != :UserID "
+                  "AND NOT EXISTS ("
+                  "   SELECT 1 FROM Friendships f "
+                  "   WHERE ((f.UserID1 = u.UserID AND f.UserID2 = :UserID) "
+                  "      OR (f.UserID1 = :UserID AND f.UserID2 = u.UserID)) "
+                  "   AND f.Status = 1"
+                  ");");
     query.bindValue(":UserID", userID);
 
     QJsonArray usersArray;
@@ -229,8 +231,8 @@ QJsonObject handleGetNonFriendUsers(const QJsonObject &request, SOCKET clientSoc
     response["action"] = "getNonFriendUsers";
     int sent = sendJsonResponse(clientSocket, response);
     if (sent != SOCKET_ERROR) {
-         qDebug() << "Sent get non-friend users response to client.";
-    } 
+        qDebug() << "Sent get non-friend users response to client.";
+    }
     return response;
 }
 
@@ -249,11 +251,10 @@ QJsonObject getFriendRequests(int userID, const std::string &dbName)
 
     QSqlQuery query(db);
     // Select users who sent me a friend request (Incoming Pending)
-    query.prepare(
-        "SELECT u.UserID, u.Username, u.Status "
-        "FROM Users u "
-        "JOIN Friendships f ON u.UserID = f.UserID1 "
-        "WHERE f.UserID2 = :UserID AND f.Status = 0;");
+    query.prepare("SELECT u.UserID, u.Username, u.Status "
+                  "FROM Users u "
+                  "JOIN Friendships f ON u.UserID = f.UserID1 "
+                  "WHERE f.UserID2 = :UserID AND f.Status = 0;");
     query.bindValue(":UserID", userID);
 
     QJsonArray usersArray;
@@ -334,23 +335,25 @@ QJsonObject handleFriendRequest(const QJsonObject &request, SOCKET clientSocket)
     return response;
 }
 
-QJsonObject acceptFriendRequest(const int &fromUserID, const int &toUserID, const std::string &dbName)
+QJsonObject acceptFriendRequest(const int &fromUserID,
+                                const int &toUserID,
+                                const std::string &dbName)
 {
     QJsonObject result;
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "AcceptFriendRequestConnection");
     db.setDatabaseName(QString::fromStdString(dbName));
     if (!db.open()) {
-        qDebug() << "Failed to open database for accepting friend request:" << db.lastError().text();
+        qDebug() << "Failed to open database for accepting friend request:"
+                 << db.lastError().text();
         result["success"] = false;
         result["message"] = "Database connection error.";
         return result;
     }
 
     QSqlQuery query(db);
-    query.prepare(
-        "update Friendships set Status = 1 "
-        "where (UserID1 = :UserID1 and UserID2 = :UserID2) "
-        "or (UserID1 = :UserID2 and UserID2 = :UserID1);");
+    query.prepare("update Friendships set Status = 1 "
+                  "where (UserID1 = :UserID1 and UserID2 = :UserID2) "
+                  "or (UserID1 = :UserID2 and UserID2 = :UserID1);");
     query.bindValue(":UserID1", fromUserID);
     query.bindValue(":UserID2", toUserID);
 
@@ -381,10 +384,9 @@ QJsonObject queryFriendStatus(const int &fromUserID, const int &toUserID, const 
     }
 
     QSqlQuery query(db);
-    query.prepare(
-        "select Status, UserID1 from Friendships "
-        "where (UserID1 = :UserID1 and UserID2 = :UserID2) "
-        "or (UserID1 = :UserID2 and UserID2 = :UserID1);");
+    query.prepare("select Status, UserID1 from Friendships "
+                  "where (UserID1 = :UserID1 and UserID2 = :UserID2) "
+                  "or (UserID1 = :UserID2 and UserID2 = :UserID1);");
     query.bindValue(":UserID1", fromUserID);
     query.bindValue(":UserID2", toUserID);
 
@@ -392,7 +394,7 @@ QJsonObject queryFriendStatus(const int &fromUserID, const int &toUserID, const 
         result["success"] = true;
         int status = query.value(0).toInt();
         int sender = query.value(1).toInt();
-        
+
         if (status == 0) {
             // If pending, check who sent it
             if (sender == fromUserID) {
@@ -452,11 +454,11 @@ QJsonObject getFriendsList(const int &userID, const std::string &dbName)
     }
 
     QSqlQuery query(db);
-    query.prepare(
-        "SELECT u.UserID, u.Username, u.Status "
-        "FROM Users u "
-        "JOIN Friendships f ON (u.UserID = f.UserID1 OR u.UserID = f.UserID2) "
-        "WHERE (f.UserID1 = :UserID OR f.UserID2 = :UserID) AND f.Status = 1 AND u.UserID != :UserID;");
+    query.prepare("SELECT u.UserID, u.Username, u.Status "
+                  "FROM Users u "
+                  "JOIN Friendships f ON (u.UserID = f.UserID1 OR u.UserID = f.UserID2) "
+                  "WHERE (f.UserID1 = :UserID OR f.UserID2 = :UserID) AND f.Status = 1 AND "
+                  "u.UserID != :UserID;");
     query.bindValue(":UserID", userID);
 
     QJsonArray friendsArray;
@@ -505,10 +507,9 @@ QJsonObject unfriend(const int &userID1, const int &userID2, const std::string &
     }
 
     QSqlQuery query(db);
-    query.prepare(
-        "delete from Friendships "
-        "where (UserID1 = :UserID1 and UserID2 = :UserID2) "
-        "or (UserID1 = :UserID2 and UserID2 = :UserID1);");
+    query.prepare("delete from Friendships "
+                  "where (UserID1 = :UserID1 and UserID2 = :UserID2) "
+                  "or (UserID1 = :UserID2 and UserID2 = :UserID1);");
     query.bindValue(":UserID1", userID1);
     query.bindValue(":UserID2", userID2);
 
@@ -538,7 +539,8 @@ QJsonObject handleUnfriend(const QJsonObject &request, SOCKET clientSocket)
     return response;
 }
 
-void initFriendHandlers(std::map<QString, std::function<QJsonObject(const QJsonObject &, SOCKET)>> &handlers)
+void initFriendHandlers(
+    std::map<QString, std::function<QJsonObject(const QJsonObject &, SOCKET)>> &handlers)
 {
     handlers["sendMessage"] = handleSendMessage;
     handlers["getAllMessages"] = handleGetAllMessages;

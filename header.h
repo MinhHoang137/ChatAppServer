@@ -1,9 +1,9 @@
 #ifndef HEADER_H
 #define HEADER_H
 
-#include <winsock2.h>
 #include <QJsonObject>
 #include <string>
+#include <winsock2.h>
 
 int sendJsonResponse(SOCKET clientSocket, const QJsonObject &response);
 void initLog();

@@ -6,8 +6,9 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include "authentication.h"
-#include "header.h"
 #include "friend.h"
+#include "header.h"
+#include "group.h"
 
 Server *Server::m_instance = nullptr;
 
@@ -37,6 +38,7 @@ Server::Server(QObject *parent)
     // Initialize handlers
     initAuthenticationHandlers(handlers);
     initFriendHandlers(handlers);
+    initGroupHandlers(handlers);
 
     // Initialize Database
     initDatabase();
@@ -103,13 +105,13 @@ void Server::initDatabase()
            << "create table if not exists Friendships ("
               "UserID1 INTEGER not null,"
               "UserID2 INTEGER not null,"
-            //   "RequesterID INTEGER not null,"
+              //   "RequesterID INTEGER not null,"
               "Status INTEGER not null,"
               "CreatedAt DATETIME default CURRENT_TIMESTAMP,"
               "primary key (UserID1, UserID2),"
               "foreign key (UserID1) references Users(UserID),"
               "foreign key (UserID2) references Users(UserID)"
-            //   "foreign key (RequesterID) references Users(UserID)"
+              //   "foreign key (RequesterID) references Users(UserID)"
               ");"
            << "create table if not exists Groups ("
               "GroupID INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -145,7 +147,6 @@ void Server::initDatabase()
     QSqlDatabase::removeDatabase("InitConnection");
     qDebug() << "Database initialized successfully.";
 }
-
 
 void Server::addUserToMap(int userId, SOCKET clientSock)
 {
@@ -247,12 +248,14 @@ void Server::handleClient(SOCKET clientSocket)
 {
     struct sockaddr_in clientAddr;
     int addrLen = sizeof(clientAddr);
-    getpeername(clientSocket, (struct sockaddr*)&clientAddr, &addrLen);
+    getpeername(clientSocket, (struct sockaddr *) &clientAddr, &addrLen);
     std::string clientIp = inet_ntoa(clientAddr.sin_addr);
 
     int iResult;
     char recvbuf[8192]; // Buffer lớn hơn để chứa JSON
     int recvbuflen = 8192;
+    // Accumulate stream data and parse newline-delimited JSON frames
+    std::string streamBuffer;
 
     // Nhận dữ liệu từ client
     do {
@@ -260,34 +263,45 @@ void Server::handleClient(SOCKET clientSocket)
         if (iResult > 0) {
             qDebug() << "Bytes received: " << iResult;
 
-            // Chuyển dữ liệu nhận được thành chuỗi (giả sử là JSON string)
-            std::string receivedData(recvbuf, iResult);
-            logMessage("[" + clientIp + "] " + receivedData);
+            // Append data to stream buffer
+            streamBuffer.append(recvbuf, iResult);
+            // Process complete frames separated by newline
+            size_t newlinePos = std::string::npos;
+            while ((newlinePos = streamBuffer.find('\n')) != std::string::npos) {
+                std::string frame = streamBuffer.substr(0, newlinePos);
+                streamBuffer.erase(0, newlinePos + 1);
 
-            // ---------------------------------------------------------
-            // [CHO TRONG DE XU LY THONG TIN DUOC GUI DEN]
-            // Tại đây bạn có thể parse chuỗi JSON 'receivedData'
-            // Ví dụ: auto jsonDoc = QJsonDocument::fromJson(QByteArray::fromStdString(receivedData));
-
-            clientSocketsMutex.lock();
-            try {
-                QJsonObject request
-                    = QJsonDocument::fromJson(QByteArray::fromStdString(receivedData)).object();
-                QString action = request["action"].toString();
-
-                if (handlers.find(action) != handlers.end()) {
-                    QJsonObject response = handlers[action](request, clientSocket);
-                } else {
-                    qDebug() << "Unknown action:" << action;
+                if (frame.empty()) {
+                    continue;
                 }
-            } catch (const std::exception &e) {
-                qDebug() << "Exception in handleClient:" << e.what();
-            } catch (...) {
-                qDebug() << "Unknown exception in handleClient";
-            }
-            clientSocketsMutex.unlock();
 
-            // ---------------------------------------------------------
+                logMessage("[" + clientIp + "] " + frame);
+
+                clientSocketsMutex.lock();
+                try {
+                    QJsonParseError parseError;
+                    QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(frame), &parseError);
+                    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+                        qDebug() << "JSON parse error:" << parseError.errorString();
+                        clientSocketsMutex.unlock();
+                        continue;
+                    }
+                    QJsonObject request = doc.object();
+                    QString action = request["action"].toString();
+
+                    if (handlers.find(action) != handlers.end()) {
+                        QJsonObject response = handlers[action](request, clientSocket);
+                        Q_UNUSED(response);
+                    } else {
+                        qDebug() << "Unknown action:" << action;
+                    }
+                } catch (const std::exception &e) {
+                    qDebug() << "Exception in handleClient:" << e.what();
+                } catch (...) {
+                    qDebug() << "Unknown exception in handleClient";
+                }
+                clientSocketsMutex.unlock();
+            }
 
         } else if (iResult == 0)
             qDebug() << "Connection closing...";

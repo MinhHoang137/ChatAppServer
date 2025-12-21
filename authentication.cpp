@@ -1,11 +1,11 @@
 #include "authentication.h"
-#include "header.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QString>
+#include "header.h"
 #include "server.h"
 
 AuthResult registerUser(const QString &username, const QString &password, const std::string &dbName)
@@ -111,7 +111,8 @@ AuthResult loginUser(const QString &username, const QString &password, const std
         db.close();
         QSqlDatabase::removeDatabase("LoginConnection");
         result.result = loginSuccess;
-        result.message = loginSuccess ? "Đăng nhập thành công." : "Tên đăng nhập hoặc mật khẩu không đúng.";
+        result.message = loginSuccess ? "Đăng nhập thành công."
+                                      : "Tên đăng nhập hoặc mật khẩu không đúng.";
         return result;
     } else {
         qDebug() << "Username not found during login.";
