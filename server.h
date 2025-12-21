@@ -13,15 +13,14 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#include <QJsonObject>
 #include <QJsonDocument>
+#include <QJsonObject>
 
 #define DB_NAME "ChatApp.db"
 
 #pragma comment(lib, "Ws2_32.lib")
 
 // Helper function to send JSON response
-
 
 class Server : public QObject
 {
