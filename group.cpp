@@ -8,7 +8,6 @@
 #include "server.h"
 #include "friend.h"
 #include "authentication.h"
-#include "server.h"
 
 QJsonObject createGroup(const QString &groupName, int ownerID, const std::string &dbName)
 {
